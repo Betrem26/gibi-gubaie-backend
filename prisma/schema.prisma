@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum Department {
+  EDUCATION           // ትምህርት
+  CHOIR               // ዘማሪ (Zemari)
+  FINANCE             // ፋይናንስ
+  PUBLIC_RELATIONS    // ህዝብ ግንኙነት
+  RESEARCH            // ምርምር (Timhirt)
+  CHARITY             // ምጽዋት (Mitswa)
+  SUNDAY_SCHOOL       // የሰንበት ትምህርት ቤት
+  MAHIBER             // ማህበር (Fellowship group)
+}
+
+// Campus Council sections — 8 sections, MAIN_OFFICE oversees all
+enum CouncilSection {
+  MAIN_OFFICE           // ዋና ጽ/ቤት — oversees all sections
+  EDUCATION             // ትምህርት ክፍል
+  CHOIR                 // ዘማሪ እና ኪነ ጥበብ ክፍል
+  FINANCE               // ልማት ክፍል
+  PUBLIC_RELATIONS      // ህዝብ ግንኙነት ክፍል
+  RESEARCH              // ምርምር ክፍል
+  CHARITY               // ምጽዋት ክፍል
+  BATCH_COORDINATION    // ባች እና ማስተባበሪያ ክፍል
+}
+
+// Role within a council section
+enum CouncilRole {
+  SECTION_HEAD        // ክፍል ሃላፊ
+  DEPUTY_HEAD         // ምክትል ሃላፊ
+  SECRETARY           // ፀሐፊ
+  TREASURER           // ገንዘብ ያዥ
+  COORDINATOR         // አስተባባሪ
+  MEMBER              // አባል
+}
+
+enum GibiRole {
+  ADMIN               // ዋና አስተዳዳሪ
+  DEPARTMENT_HEAD     // የክፍል ሃላፊ
+  SECRETARY           // ፀሐፊ
+  TREASURER           // ገንዘብ ያዥ
+  MEMBER              // አባል
+}
+
+// Spiritual rank / title within the association
+enum SpiritualTitle {
+  DEACON              // ዲያቆን
+  SUBDEACON           // ንፍቀ ዲያቆን
+  READER              // ንባቢ
+  ZEMARI              // ዘማሪ (Cantor)
+  NONE
+}
+
+// Type of church event / activity
+enum EventType {
+  KIDASE              // ቅዳሴ — Divine Liturgy
+  TIMKAT              // ጥምቀት — Epiphany
+  MESKEL              // መስቀል — Finding of the True Cross
+  ENKUTATASH          // እንቁጣጣሽ — Ethiopian New Year
+  FASIKA              // ፋሲካ — Easter
+  GENA                // ገና — Ethiopian Christmas
+  TSOME_FILSETA       // ጾመ ፍልሰታ — Fast of the Assumption
+  TSOME_NEBIYAT       // ጾመ ነቢያት — Advent Fast
+  WEEKLY_MEETING      // ሳምንታዊ ስብሰባ
+  PRAYER_SESSION      // የጸሎት ጊዜ
+  BIBLE_STUDY         // የመጽሐፍ ቅዱስ ጥናት
+  COMMUNITY_SERVICE   // የማህበረሰብ አገልግሎት
+  SPECIAL_EVENT       // ልዩ ዝግጅት
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String         @id @default(cuid())
+  clerkId         String         @unique
+  name            String
+  email           String         @unique
+  phone           String?
+  universityId    String         @unique
+  department      Department
+  batch           String
+  role            GibiRole       @default(MEMBER)
+  spiritualTitle  SpiritualTitle @default(NONE)
+  isActive        Boolean        @default(true)
+  baptismalName   String?        // የጥምቀት ስም
+  kebele          String?        // Local area / parish
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  attendances     Attendance[]
+  payments        Payment[]
+  prayerRequests  PrayerRequest[]
+  taskAssignments TaskAssignment[]
+}
+
+model Event {
+  id          String     @id @default(cuid())
+  name        String
+  type        EventType
+  description String?
+  eventDate   DateTime
+  location    String?
+  isRecurring Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  attendances Attendance[]
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  // Legacy fields kept for backward compatibility
+  eventName String
+  eventDate DateTime
+  present   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventDate, eventName])
+}
+
+model Payment {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Float
+  month     String    // e.g. "2025-01"
+  isPaid    Boolean   @default(false)
+  paidAt    DateTime?
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, month])
+}
+
+model Expense {
+  id          String      @id @default(cuid())
+  title       String
+  amount      Float
+  category    Department?
+  description String?
+  date        DateTime
+  createdAt   DateTime    @default(now())
+}
+
+// Prayer / intercession requests from members
+model PrayerRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  isAnonymous Boolean  @default(false)
+  isResolved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+// Tasks assigned to members (e.g. lead Kidase, prepare Timkat)
+model Task {
+  id          String           @id @default(cuid())
+  title       String
+  description String?
+  dueDate     DateTime?
+  isCompleted Boolean          @default(false)
+  department  Department?
+  createdAt   DateTime         @default(now())
+
+  assignments TaskAssignment[]
+}
+
+model TaskAssignment {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt  DateTime @default(now())
+
+  @@unique([taskId, userId])
+}
+
+// ── Campus Council ────────────────────────────────────────────────────────────
+
+// A person serving in one of the 7 campus council sections
+model CouncilMember {
+  id              String         @id @default(cuid())
+  name            String
+  email           String         @unique
+  phone           String?
+  universityId    String         @unique
+  section         CouncilSection
+  subSection      String?        // e.g. "አባላት", "ኦዲት", "ዜማ እና ንዋዬ ቅዱሳት"
+  role            CouncilRole    @default(MEMBER)
+  batch           String
+  baptismalName   String?        // የጥምቀት ስም
+  bio             String?
+  photoUrl        String?
+  isActive        Boolean        @default(true)
+  joinedAt        DateTime       @default(now())
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+// Announcement board — Kidase schedule, fasting reminders, event notices
+model Announcement {
+  id          String    @id @default(cuid())
+  title       String
+  body        String
+  isPinned    Boolean   @default(false)
+  publishedAt DateTime  @default(now())
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
