@@ -146,7 +146,7 @@ export class SMSService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as { message?: string };
         console.error('[TWILIO] Error:', error);
         return {
           success: false,
@@ -155,7 +155,7 @@ export class SMSService {
         };
       }
 
-      const result = await response.json();
+      const result = await response.json() as { sid?: string };
       console.log(`[TWILIO] SMS sent successfully to ${message.to}. SID: ${result.sid}`);
 
       return {

@@ -32,8 +32,7 @@ router.post("/", async (req: Request, res: Response) => {
       },
     });
 
-    const clerk = await clerkClient();
-    await clerk.users.updateUserMetadata(userId, {
+    await clerkClient.users.updateUserMetadata(userId, {
       publicMetadata: { councilSection: section, councilMemberId: member.id, councilRole: role, onboardingDone: true },
     });
 

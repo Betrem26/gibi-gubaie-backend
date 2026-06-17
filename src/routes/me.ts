@@ -10,8 +10,7 @@ router.get("/redirect", async (req: Request, res: Response) => {
   const { userId } = getAuth(req);
   if (!userId) return res.json({ redirectUrl: "/sign-in" });
 
-  const clerk = await clerkClient();
-  const user  = await clerk.users.getUser(userId);
+  const user  = await clerkClient.users.getUser(userId);
   const meta  = user.publicMetadata as {
     onboardingDone?: boolean;
     councilSection?: CouncilSection;

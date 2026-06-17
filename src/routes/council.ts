@@ -8,7 +8,7 @@ const router = Router();
 // GET /api/council?section=...
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const section = req.query.section as CouncilSection | undefined;
+    const section = (req.query.section as string | undefined) as CouncilSection | undefined;
     const members = await prisma.councilMember.findMany({
       where: section ? { section } : undefined,
       orderBy: [{ section: "asc" }, { role: "asc" }, { name: "asc" }],
@@ -31,8 +31,7 @@ router.get("/:id", async (req: Request, res: Response) => {
 });
 
 async function getCallerMeta(userId: string) {
-  const clerk    = await clerkClient();
-  const user     = await clerk.users.getUser(userId);
+  const user     = await clerkClient.users.getUser(userId);
   const meta     = user.publicMetadata as { councilSection?: string; councilRole?: string } | undefined;
   return { section: meta?.councilSection ?? null, role: meta?.councilRole ?? "MEMBER" };
 }
