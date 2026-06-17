@@ -1,7 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
 import { prisma } from "../lib/prisma";
-import { CouncilSection } from "../generated/prisma";
 
 const router = Router();
 
@@ -9,10 +8,12 @@ const router = Router();
 router.get("/", async (req: Request, res: Response) => {
   try {
     const raw = req.query.section;
-    const section: CouncilSection | undefined =
-      typeof raw === "string" ? (raw as CouncilSection) : undefined;
+    const sectionStr: string | undefined = raw
+      ? String(Array.isArray(raw) ? raw[0] : raw)
+      : undefined;
     const members = await prisma.councilMember.findMany({
-      where: section ? { section } : undefined,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      where: sectionStr ? { section: sectionStr as any } : undefined,
       orderBy: [{ section: "asc" }, { role: "asc" }, { name: "asc" }],
     });
     res.json(members);
