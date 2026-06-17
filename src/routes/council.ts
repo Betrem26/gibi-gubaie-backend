@@ -8,7 +8,8 @@ const router = Router();
 // GET /api/council?section=...
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const section = (req.query.section as string | undefined) as CouncilSection | undefined;
+    const raw     = req.query.section;
+    const section = (typeof raw === "string" ? raw : undefined) as CouncilSection | undefined;
     const members = await prisma.councilMember.findMany({
       where: section ? { section } : undefined,
       orderBy: [{ section: "asc" }, { role: "asc" }, { name: "asc" }],
