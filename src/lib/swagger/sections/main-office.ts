@@ -10,6 +10,7 @@ export const mainOfficeSpec = {
   },
   servers: server,
   tags: [
+    { name: "Auth",           description: "Account registration, login, and session management" },
     { name: "Members",        description: "Manage all association members" },
     { name: "Council",        description: "Manage all 8 council sections" },
     { name: "Finance",        description: "Payments and expenses" },
@@ -28,6 +29,103 @@ export const mainOfficeSpec = {
         responses: { 200: { description: "OK", content: { "application/json": { schema: { type: "object", properties: { status: { type: "string", example: "ok" } } } } } } },
       },
     },
+
+    // ── Auth ──────────────────────────────────────────────────────────────────
+    "/auth/register": {
+      post: {
+        tags: ["Auth"],
+        summary: "Create a new account",
+        description: "Registers a new Clerk user + creates a CouncilMember record in one step.",
+        operationId: "register",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: {
+            type: "object",
+            required: ["name","email","password","universityId","section","batch"],
+            properties: {
+              name:         { type: "string", example: "Betrem Hailu" },
+              email:        { type: "string", format: "email", example: "betrem@aau.edu.et" },
+              password:     { type: "string", format: "password", example: "SecurePass123!" },
+              phone:        { type: "string", example: "+251911234567" },
+              universityId: { type: "string", example: "UGR/1234/15" },
+              section:      { $ref: "#/components/schemas/CouncilSection" },
+              batch:        { type: "string", example: "2022" },
+              role:         { $ref: "#/components/schemas/CouncilRole" },
+            },
+          } } },
+        },
+        responses: {
+          201: { description: "Account created — use POST /auth/login to get your access token", content: { "application/json": { schema: { type: "object", properties: {
+            message:     { type: "string" },
+            userId:      { type: "string" },
+            memberId:    { type: "string" },
+            email:       { type: "string" },
+            section:     { $ref: "#/components/schemas/CouncilSection" },
+            role:        { $ref: "#/components/schemas/CouncilRole" },
+            redirectUrl: { type: "string" },
+          } } } } },
+          400: { description: "Missing required fields" },
+          409: { description: "Email already registered" },
+        },
+      },
+    },
+    "/auth/login": {
+      post: {
+        tags: ["Auth"],
+        summary: "Login and get access token",
+        description: "Authenticates credentials via Clerk and returns a Bearer JWT token. Copy the `access_token` value and click **Authorize 🔓** at the top of the page to authenticate all subsequent requests.",
+        operationId: "login",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: {
+            type: "object",
+            required: ["email","password"],
+            properties: {
+              email:    { type: "string", format: "email", example: "betrem@aau.edu.et" },
+              password: { type: "string", format: "password", example: "SecurePass123!" },
+            },
+          } } },
+        },
+        responses: {
+          200: { description: "Login successful", content: { "application/json": { schema: { type: "object", properties: {
+            access_token: { type: "string", description: "Clerk JWT — paste into Authorize 🔓" },
+            session_id:   { type: "string" },
+            token_type:   { type: "string", example: "Bearer" },
+            user: { type: "object", properties: {
+              email:    { type: "string" },
+              memberId: { type: "string" },
+              section:  { $ref: "#/components/schemas/CouncilSection" },
+              role:     { $ref: "#/components/schemas/CouncilRole" },
+              name:     { type: "string" },
+            } },
+          } } } } },
+          400: { description: "email and password are required" },
+          401: { description: "Invalid credentials" },
+        },
+      },
+    },
+    "/auth/me": {
+      get: {
+        tags: ["Auth"],
+        summary: "Get current user profile",
+        description: "Returns the council profile of the authenticated user. Requires a valid Bearer token from `/auth/login`.",
+        operationId: "authMe",
+        security: [{ ClerkAuth: [] }],
+        responses: {
+          200: { description: "Current user profile", content: { "application/json": { schema: { type: "object", properties: {
+            clerkId:  { type: "string" },
+            email:    { type: "string" },
+            section:  { $ref: "#/components/schemas/CouncilSection" },
+            role:     { $ref: "#/components/schemas/CouncilRole" },
+            memberId: { type: "string" },
+            onboarded:{ type: "boolean" },
+            profile:  { $ref: "#/components/schemas/CouncilMember" },
+          } } } } },
+          401: { description: "Invalid or expired token" },
+        },
+      },
+    },
+
     "/api/members": {
       get: {
         tags: ["Members"], summary: "List all association members", operationId: "listMembers",

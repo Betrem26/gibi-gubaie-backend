@@ -67,11 +67,66 @@ Which creates a \`CouncilMember\` record and writes the metadata to Clerk, compl
   },
   servers: server,
   tags: [
+    { name: "Auth",       description: "Register, login, and get access tokens" },
     { name: "Session",    description: "Current user session helpers" },
     { name: "Onboarding", description: "First-time council member setup" },
   ],
   components: { securitySchemes, schemas: commonSchemas },
   paths: {
+    "/auth/register": {
+      post: {
+        tags: ["Auth"], summary: "Create a new account", operationId: "authRegister",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name","email","password","universityId","section","batch"], properties: {
+          name: { type: "string", example: "Betrem Hailu" },
+          email: { type: "string", format: "email", example: "betrem@aau.edu.et" },
+          password: { type: "string", format: "password", example: "SecurePass123!" },
+          phone: { type: "string", example: "+251911234567" },
+          universityId: { type: "string", example: "UGR/1234/15" },
+          section: { $ref: "#/components/schemas/CouncilSection" },
+          batch: { type: "string", example: "2022" },
+          role: { $ref: "#/components/schemas/CouncilRole" },
+        } } } } },
+        responses: {
+          201: { description: "Account created" },
+          400: { description: "Missing required fields" },
+          409: { description: "Email already registered" },
+        },
+      },
+    },
+    "/auth/login": {
+      post: {
+        tags: ["Auth"],
+        summary: "Login — get access token",
+        description: "Returns a `Bearer` JWT. Copy the `access_token` and click **Authorize 🔓** to authenticate all secured endpoints.",
+        operationId: "authLogin",
+        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["email","password"], properties: {
+          email: { type: "string", format: "email", example: "betrem@aau.edu.et" },
+          password: { type: "string", format: "password", example: "SecurePass123!" },
+        } } } } },
+        responses: {
+          200: { description: "Login successful", content: { "application/json": { schema: { type: "object", properties: {
+            access_token: { type: "string", description: "Paste this into Authorize 🔓 → Bearer value" },
+            token_type:   { type: "string", example: "Bearer" },
+            user: { type: "object", properties: { email: { type: "string" }, section: { $ref: "#/components/schemas/CouncilSection" }, role: { $ref: "#/components/schemas/CouncilRole" }, name: { type: "string" } } },
+          } } } } },
+          401: { description: "Invalid credentials" },
+        },
+      },
+    },
+    "/auth/me": {
+      get: {
+        tags: ["Auth"], summary: "Get my profile (requires token)", operationId: "authMe",
+        security: [{ ClerkAuth: [] }],
+        responses: {
+          200: { description: "Current user", content: { "application/json": { schema: { type: "object", properties: {
+            email: { type: "string" }, section: { $ref: "#/components/schemas/CouncilSection" },
+            role: { $ref: "#/components/schemas/CouncilRole" }, onboarded: { type: "boolean" },
+            profile: { $ref: "#/components/schemas/CouncilMember" },
+          } } } } },
+          401: { description: "Unauthorized" },
+        },
+      },
+    },
     "/api/me/redirect": {
       get: {
         tags: ["Session"],

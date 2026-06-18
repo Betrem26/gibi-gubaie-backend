@@ -6,6 +6,7 @@ import { sectionSpecs, hubSections } from "./lib/swagger/index";
 
 import announcementsRouter   from "./routes/announcements";
 import attendanceRouter      from "./routes/attendance";
+import authRouter            from "./routes/auth";
 import councilRouter         from "./routes/council";
 import eventsRouter          from "./routes/events";
 import financeRouter         from "./routes/finance";
@@ -124,6 +125,9 @@ Object.entries(sectionSpecs).forEach(([slug, spec]) => {
 </html>`);
   });
 });
+
+// ── Auth routes — public, before clerkMiddleware ──────────────────────────────
+app.use("/auth", authRouter);
 
 // ── Clerk middleware + API routes ─────────────────────────────────────────────
 app.use(clerkMiddleware());
