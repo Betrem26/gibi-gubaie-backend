@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
 import { PrismaNeonHttp } from "@prisma/adapter-neon";
 
 declare global {

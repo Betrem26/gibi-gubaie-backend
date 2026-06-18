@@ -15,7 +15,7 @@ router.get("/", async (req: Request, res: Response) => {
       where: { eventName, eventDate: new Date(eventDate) },
       select: { userId: true, present: true },
     });
-    res.json({ presentIds: records.filter((r) => r.present).map((r) => r.userId) });
+    res.json({ presentIds: records.filter((r: { userId: string; present: boolean }) => r.present).map((r: { userId: string; present: boolean }) => r.userId) });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
   }

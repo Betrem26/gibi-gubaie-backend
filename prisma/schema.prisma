@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../src/generated/prisma"
 }
 
@@ -24,7 +24,7 @@ enum Department {
 enum CouncilSection {
   MAIN_OFFICE           // ዋና ጽ/ቤት — oversees all sections
   EDUCATION             // ትምህርት ክፍል
-  CHOIR                 // ዘማሪ እና ኪነ ጥበብ ክፍል
+  CHOIR                 // መዝሙር እና ኪነ ጥበብ ክፍል
   FINANCE               // ልማት ክፍል
   PUBLIC_RELATIONS      // ህዝብ ግንኙነት ክፍል
   RESEARCH              // ምርምር ክፍል

@@ -1,7 +1,7 @@
 /**
  * council-data.ts — pure data, no React imports, safe to import anywhere.
  */
-import { CouncilSection, CouncilRole } from "@prisma/client";
+import { CouncilSection, CouncilRole } from "../generated/prisma/client";
 
 // ── Serializable section metadata (no icon) ───────────────────────────────────
 
