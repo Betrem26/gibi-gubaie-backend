@@ -42,22 +42,24 @@ app.get("/api-docs", (_req, res) => {
   <style>
     body { margin: 0; }
     .swagger-ui .topbar { background-color: #1e40af; }
-    .swagger-ui .topbar .download-url-wrapper { display: none; }
   </style>
 </head>
 <body>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
   <script>
     window.onload = () => {
       SwaggerUIBundle({
         url: "/api-docs.json",
         dom_id: "#swagger-ui",
-        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
-        layout: "StandaloneLayout",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+        layout: "BaseLayout",
         persistAuthorization: true,
         deepLinking: true,
+        defaultModelsExpandDepth: 1,
+        defaultModelExpandDepth: 1,
+        displayRequestDuration: true,
+        filter: true,
       });
     };
   </script>
