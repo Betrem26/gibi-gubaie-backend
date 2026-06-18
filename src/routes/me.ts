@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { getAuth, clerkClient } from "@clerk/express";
-import { CouncilSection } from "../generated/prisma";
+import { CouncilSection } from "@prisma/client";
 import { SECTION_TO_SLUG } from "../lib/council-data";
 
 const router = Router();
