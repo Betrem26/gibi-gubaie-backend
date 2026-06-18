@@ -19,20 +19,28 @@ import meRouter            from "./routes/me";
 const app  = express();
 const PORT = process.env.PORT ?? 4000;
 
-// ── Middleware ────────────────────────────────────────────────────────────────
+// ── Base middleware ───────────────────────────────────────────────────────────
 app.use(cors({
   origin: process.env.FRONTEND_URL ?? "http://localhost:3000",
   credentials: true,
 }));
 app.use(express.json());
-app.use(clerkMiddleware());
 
-// ── API Docs (CDN-hosted Swagger UI — no extra npm package needed) ────────────
-app.get("/api-docs.json", (_req, res) => res.json(swaggerSpec));
+// ── API Docs — registered BEFORE clerkMiddleware so Clerk never intercepts ────
+app.get("/", (_req, res) => res.redirect("/api-docs"));
+
+app.get("/api-docs.json", (_req, res) => {
+  try {
+    res.json(swaggerSpec);
+  } catch (e) {
+    res.status(500).json({ error: "Failed to load spec" });
+  }
+});
 
 app.get("/api-docs", (_req, res) => {
-  res.setHeader("Content-Type", "text/html");
-  res.send(`<!DOCTYPE html>
+  try {
+    res.setHeader("Content-Type", "text/html");
+    res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -65,7 +73,13 @@ app.get("/api-docs", (_req, res) => {
   </script>
 </body>
 </html>`);
+  } catch (e) {
+    res.status(500).send("Failed to load API docs");
+  }
 });
+
+// ── Clerk middleware — applied only to API routes below ───────────────────────
+app.use(clerkMiddleware());
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/announcements",    announcementsRouter);
