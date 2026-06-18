@@ -1,4 +1,5 @@
 import { mainOfficeSpec } from "./sections/main-office";
+import { authSpec }       from "./sections/auth";
 import { buildSectionSpec } from "./sections/section-factory";
 
 // ── Build the 7 section specs using the factory ───────────────────────────────
@@ -62,6 +63,7 @@ export const batchCoordSpec = buildSectionSpec({
 // ── Export the full registry ──────────────────────────────────────────────────
 
 export const sectionSpecs: Record<string, object> = {
+  "auth":              authSpec,
   "main-office":       mainOfficeSpec,
   "education":         educationSpec,
   "choir":             choirSpec,
@@ -75,7 +77,8 @@ export const sectionSpecs: Record<string, object> = {
 // ── Hub page metadata ─────────────────────────────────────────────────────────
 
 export const hubSections = [
-  { slug: "main-office",        label: "Main Office",            amharic: "ዋና ጽ/ቤት",                color: "#1e40af", endpoints: "All endpoints" },
+  { slug: "auth",               label: "Authentication",         amharic: "መግቢያ / ፈቃድ",              color: "#0f172a", endpoints: "Session · Onboarding · Token guide" },
+  { slug: "main-office",        label: "Main Office",            amharic: "ዋና ጽ/ቤት",                color: "#1e40af", endpoints: "All endpoints — full access" },
   { slug: "education",          label: "Education",              amharic: "ትምህርት ክፍል",              color: "#0ea5e9", endpoints: "Council · Tasks · Events · Announcements · Prayer" },
   { slug: "choir",              label: "Choir & Fine Arts",      amharic: "ዘማሪ እና ኪነ ጥበብ ክፍል",    color: "#a855f7", endpoints: "Council · Tasks · Events · Announcements · Prayer" },
   { slug: "finance",            label: "Development",            amharic: "ልማት ክፍል",               color: "#10b981", endpoints: "Council · Tasks · Events · Announcements · Prayer" },
