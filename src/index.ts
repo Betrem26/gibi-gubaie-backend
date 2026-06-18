@@ -29,9 +29,9 @@ app.use(express.json());
 app.use(clerkMiddleware());
 
 // ── API Docs ──────────────────────────────────────────────────────────────────
-app.use(
+app.use("/api-docs", ...swaggerUi.serve);
+app.get(
   "/api-docs",
-  swaggerUi.serve,
   swaggerUi.setup(swaggerSpec, {
     customSiteTitle: "Gibi Gubaie API Docs",
     customCss: ".swagger-ui .topbar { background-color: #1e40af; }",
