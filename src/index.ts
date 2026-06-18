@@ -2,6 +2,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./lib/swagger";
 
 import announcementsRouter from "./routes/announcements";
 import attendanceRouter    from "./routes/attendance";
@@ -26,6 +28,20 @@ app.use(cors({
 app.use(express.json());
 app.use(clerkMiddleware());
 
+// ── API Docs ──────────────────────────────────────────────────────────────────
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customSiteTitle: "Gibi Gubaie API Docs",
+    customCss: ".swagger-ui .topbar { background-color: #1e40af; }",
+    swaggerOptions: { persistAuthorization: true },
+  })
+);
+
+// Serve raw OpenAPI JSON (useful for Postman import)
+app.get("/api-docs.json", (_req, res) => res.json(swaggerSpec));
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/announcements",    announcementsRouter);
 app.use("/api/attendance",       attendanceRouter);
@@ -44,6 +60,7 @@ app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
 app.listen(PORT, () => {
   console.log(`✅ Gibi Gubaie API running on port ${PORT}`);
+  console.log(`📚 API Docs: http://localhost:${PORT}/api-docs`);
 });
 
 export default app;
