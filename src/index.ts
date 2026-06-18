@@ -2,7 +2,6 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
-import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./lib/swagger";
 
 import announcementsRouter from "./routes/announcements";
@@ -28,19 +27,43 @@ app.use(cors({
 app.use(express.json());
 app.use(clerkMiddleware());
 
-// ── API Docs ──────────────────────────────────────────────────────────────────
-app.use("/api-docs", ...swaggerUi.serve);
-app.get(
-  "/api-docs",
-  swaggerUi.setup(swaggerSpec, {
-    customSiteTitle: "Gibi Gubaie API Docs",
-    customCss: ".swagger-ui .topbar { background-color: #1e40af; }",
-    swaggerOptions: { persistAuthorization: true },
-  })
-);
-
-// Serve raw OpenAPI JSON (useful for Postman import)
+// ── API Docs (CDN-hosted Swagger UI — no extra npm package needed) ────────────
 app.get("/api-docs.json", (_req, res) => res.json(swaggerSpec));
+
+app.get("/api-docs", (_req, res) => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gibi Gubaie API Docs</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
+  <style>
+    body { margin: 0; }
+    .swagger-ui .topbar { background-color: #1e40af; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = () => {
+      SwaggerUIBundle({
+        url: "/api-docs.json",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: "StandaloneLayout",
+        persistAuthorization: true,
+        deepLinking: true,
+      });
+    };
+  </script>
+</body>
+</html>`);
+});
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api/announcements",    announcementsRouter);
