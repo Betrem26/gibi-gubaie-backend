@@ -4,15 +4,50 @@ import { prisma } from "../lib/prisma";
 
 const router = Router();
 
-// GET /api/members — returns all User records with attendance & payment counts.
-// Public read (no auth required) — mutations require auth.
+// ── GET /api/members ──────────────────────────────────────────────────────────
+// Returns CouncilMember records shaped to match the MemberWithStats interface
+// the frontend expects.  The User model is for the general association roster;
+// CouncilMember is for campus council staff.  Both are surfaced here so the
+// Members page is populated as soon as council members are registered.
 router.get("/", async (_req, res: Response) => {
   try {
-    const members = await prisma.user.findMany({
+    // Prefer User records (general roster); fall back to CouncilMembers when
+    // the User table is empty (i.e. everyone registered via /auth/register).
+    const users = await prisma.user.findMany({
       orderBy: { createdAt: "desc" },
       include: { _count: { select: { attendances: true, payments: true } } },
+    }).catch(() => [] as never[]);
+
+    if (users.length > 0) {
+      return res.json(users);
+    }
+
+    // No User rows — surface CouncilMembers instead, shaped to MemberWithStats
+    const councilMembers = await prisma.councilMember.findMany({
+      orderBy: { createdAt: "desc" },
     });
-    res.json(members);
+
+    const shaped = councilMembers.map((m) => ({
+      id:            m.id,
+      clerkId:       null,
+      name:          m.name,
+      email:         m.email,
+      phone:         m.phone,
+      universityId:  m.universityId,
+      // Map CouncilSection → Department (best-effort)
+      department:    sectionToDepartment(m.section),
+      batch:         m.batch,
+      role:          "MEMBER" as const,
+      spiritualTitle:"NONE"   as const,
+      isActive:      m.isActive,
+      baptismalName: m.baptismalName,
+      kebele:        null,
+      createdAt:     m.createdAt,
+      updatedAt:     m.updatedAt,
+      _count:        { attendances: 0, payments: 0 },
+    }));
+
+    res.json(shaped);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[GET /api/members] Error:", msg);
@@ -20,7 +55,7 @@ router.get("/", async (_req, res: Response) => {
   }
 });
 
-// POST /api/members — create a member manually (auth required)
+// ── POST /api/members ─────────────────────────────────────────────────────────
 router.post("/", async (req: Request, res: Response) => {
   const { userId } = getAuth(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -48,13 +83,14 @@ router.post("/", async (req: Request, res: Response) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[POST /api/members] Error:", msg);
-    res.status(msg.includes("Unique") ? 409 : 400).json({
-      error: msg.includes("Unique") ? "Email or ID already exists." : msg,
-    });
+    if (msg.includes("Unique") || msg.includes("unique")) {
+      return res.status(409).json({ error: "Email or University ID already exists." });
+    }
+    res.status(500).json({ error: msg });
   }
 });
 
-// PATCH /api/members — update a member (auth required)
+// ── PATCH /api/members ────────────────────────────────────────────────────────
 router.patch("/", async (req: Request, res: Response) => {
   const { userId } = getAuth(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -85,5 +121,20 @@ router.patch("/", async (req: Request, res: Response) => {
     res.status(400).json({ error: msg });
   }
 });
+
+// ── helper: map CouncilSection to the closest Department enum value ───────────
+function sectionToDepartment(section: string): string {
+  const map: Record<string, string> = {
+    MAIN_OFFICE:        "EDUCATION",
+    EDUCATION:          "EDUCATION",
+    CHOIR:              "CHOIR",
+    FINANCE:            "FINANCE",
+    PUBLIC_RELATIONS:   "PUBLIC_RELATIONS",
+    RESEARCH:           "RESEARCH",
+    CHARITY:            "CHARITY",
+    BATCH_COORDINATION: "EDUCATION",
+  };
+  return map[section] ?? "EDUCATION";
+}
 
 export default router;

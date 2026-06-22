@@ -129,7 +129,8 @@ Object.entries(sectionSpecs).forEach(([slug, spec]) => {
 // ── Auth routes — public, before clerkMiddleware ──────────────────────────────
 app.use("/auth", authRouter);
 
-// ── Clerk middleware + API routes ─────────────────────────────────────────────
+// ── Clerk middleware — validates token if present, never blocks ───────────────
+// Individual routes call getAuth(req) and return 401 themselves.
 app.use(clerkMiddleware());
 
 app.use("/api/announcements",    announcementsRouter);
@@ -145,6 +146,13 @@ app.use("/api/task-assignments", taskAssignmentsRouter);
 app.use("/api/me",               meRouter);
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "gibi-gubaie-backend" }));
+
+// ── Global error handler — prevents unhandled crashes returning empty 500s ────
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error("[Unhandled error]", msg);
+  res.status(500).json({ error: msg });
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Gibi Gubaie API running on port ${PORT}`);
