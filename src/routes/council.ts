@@ -106,7 +106,7 @@ router.patch("/", async (req: Request, res: Response) => {
         ...(data.baptismalName !== undefined && { baptismalName: data.baptismalName ? String(data.baptismalName).trim() : null }),
         ...(data.bio           !== undefined && { bio: data.bio ? String(data.bio).trim() : null }),
         ...(data.photoUrl      !== undefined && { photoUrl: data.photoUrl ? String(data.photoUrl).trim() : null }),
-        ...(data.isActive      !== undefined && { isActive: data.isActive === "true" || data.isActive === true }),
+        ...(data.isActive      !== undefined && { isActive: data.isActive === "false" || data.isActive === false ? false : Boolean(data.isActive) }),
       },
     });
     res.json(member);

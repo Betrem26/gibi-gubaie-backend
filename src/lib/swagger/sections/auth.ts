@@ -3,152 +3,358 @@ import { securitySchemes, commonSchemas, server } from "../shared";
 export const authSpec = {
   openapi: "3.0.3",
   info: {
-    title: "Auth API — Authentication & Authorization",
+    title: "Auth API — Authentication & Session",
     description: `## Gibi Gubaie · Authentication Service
 
-This project uses **[Clerk](https://clerk.com)** for all authentication. There is no custom login or register endpoint in this backend — Clerk manages user sessions externally.
+This API uses **[Clerk](https://clerk.com)** for identity management.
+All protected endpoints require a \`Bearer\` token obtained from \`POST /auth/login\`.
 
 ---
 
-## How to Authenticate
+## Quick Start — Authorize Swagger
 
-### Step 1 — Sign in via the frontend
-Visit the frontend at **https://gibi-gubaie-frontend.onrender.com/sign-in** and sign in with your account.
+1. Call **\`POST /auth/login\`** below with your email (or phone) + password.
+2. Copy the **\`access_token\`** value from the response.
+3. Click **Authorize 🔓** at the top of the page.
+4. Paste the token and click **Authorize**.
 
-### Step 2 — Get your JWT token
-After signing in, open the browser **DevTools Console** and run:
-\`\`\`js
-const token = await window.Clerk.session.getToken();
-console.log(token);
-\`\`\`
-Copy the printed token.
+All subsequent requests in this session will automatically include \`Authorization: Bearer <token>\`.
 
-### Step 3 — Authorize in Swagger
-Click the **Authorize 🔓** button at the top of any API doc page, paste the token, and click **Authorize**. All protected endpoints will now include the \`Authorization: Bearer <token>\` header automatically.
+> **Token lifetime:** 24 hours. Re-login to refresh.
 
 ---
 
-## Token Lifetime
-Clerk JWTs expire after **60 seconds** by default (short-lived for security). If you get 401 errors, refresh the token by running \`getToken()\` again in the console.
+## Supported Login Methods
+
+| Identifier | Field | Example |
+|---|---|---|
+| Email | \`email\` | \`betrem@aau.edu.et\` |
+| Phone | \`phone\` | \`+251911234567\` |
+
+You must provide exactly **one** of \`email\` or \`phone\`, plus \`password\`.
 
 ---
 
 ## Authorization Model
 
-| Clerk \`publicMetadata\` field | Description |
+| \`publicMetadata\` field | Description |
 |---|---|
-| \`councilSection\` | Which of the 8 sections this user belongs to |
-| \`councilMemberId\` | The \`CouncilMember.id\` in your database |
-| \`councilRole\` | Their role: SECTION_HEAD, DEPUTY_HEAD, etc. |
-| \`onboardingDone\` | \`true\` once they have completed onboarding |
+| \`councilSection\` | One of the 8 council sections |
+| \`councilMemberId\` | The \`CouncilMember.id\` in the database |
+| \`councilRole\` | \`SECTION_HEAD\`, \`DEPUTY_HEAD\`, \`MEMBER\`, etc. |
+| \`onboardingDone\` | \`true\` after onboarding is complete |
 
-### Section-scoped write permissions
+### Write permissions per role
 
-| Who | Can write to |
+| Role | Scope |
 |---|---|
-| \`MAIN_OFFICE\` | All 8 sections |
-| \`RESEARCH\` | All 8 sections |
-| \`SECTION_HEAD\` or \`DEPUTY_HEAD\` | Their own section only |
+| \`MAIN_OFFICE\` member | All 8 sections |
+| \`RESEARCH\` member | All 8 sections |
+| \`SECTION_HEAD\` / \`DEPUTY_HEAD\` | Own section only |
 | All other roles | Read-only |
 
 ---
 
 ## Onboarding Flow
 
-A new user who signs in for the first time has no \`councilSection\` in their metadata. The frontend redirects them to \`/onboarding\` where they submit their details. That calls:
-
-\`\`\`
-POST /api/onboarding
-\`\`\`
-
-Which creates a \`CouncilMember\` record and writes the metadata to Clerk, completing the setup.`,
+A newly registered user has no \`councilSection\` in their metadata.
+The frontend detects this via \`GET /api/me/redirect\` and navigates them to \`/onboarding\`.
+Submitting the onboarding form calls \`POST /api/onboarding\`, which creates a \`CouncilMember\`
+record and writes the metadata to Clerk — completing the setup.`,
     version: "1.0.0",
-    contact: { name: "Gibi Gubaie API Hub", url: "https://gibi-gubaie-backend.onrender.com/api-docs" },
+    contact: {
+      name: "Gibi Gubaie API Hub",
+      url:  "https://gibi-gubaie-backend.onrender.com/api-docs",
+    },
   },
   servers: server,
   tags: [
-    { name: "Auth",       description: "Register, login, and get access tokens" },
-    { name: "Session",    description: "Current user session helpers" },
-    { name: "Onboarding", description: "First-time council member setup" },
+    { name: "Auth",       description: "Register, login, and retrieve access tokens" },
+    { name: "Session",    description: "Current user session and redirect helpers" },
+    { name: "Onboarding", description: "First-time council member profile setup" },
   ],
   components: { securitySchemes, schemas: commonSchemas },
   paths: {
+
+    // ── POST /auth/register ─────────────────────────────────────────────────
     "/auth/register": {
       post: {
-        tags: ["Auth"], summary: "Create a new account", operationId: "authRegister",
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["name","email","password","universityId","section","batch"], properties: {
-          name: { type: "string", example: "Betrem Hailu" },
-          email: { type: "string", format: "email", example: "betrem@aau.edu.et" },
-          password: { type: "string", format: "password", example: "SecurePass123!" },
-          phone: { type: "string", example: "+251911234567" },
-          universityId: { type: "string", example: "UGR/1234/15" },
-          section: { $ref: "#/components/schemas/CouncilSection" },
-          batch: { type: "string", example: "2022" },
-          role: { $ref: "#/components/schemas/CouncilRole" },
-        } } } } },
+        tags: ["Auth"],
+        summary: "Register a new council member account",
+        description: `Creates a Clerk user account and a \`CouncilMember\` record in one step.
+Returns the new member ID and a redirect URL.
+After registering, call **\`POST /auth/login\`** to obtain an access token.`,
+        operationId: "authRegister",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["name", "email", "password", "universityId", "section", "batch"],
+                properties: {
+                  name:         { type: "string",  example: "Betrem Hailu" },
+                  email:        { type: "string",  format: "email",    example: "betrem@aau.edu.et" },
+                  password:     { type: "string",  format: "password", example: "SecurePass123!", minLength: 8 },
+                  phone:        { type: "string",  example: "+251911234567", description: "Optional. E.164 format recommended." },
+                  universityId: { type: "string",  example: "UGR/1234/15" },
+                  section:      { $ref: "#/components/schemas/CouncilSection" },
+                  batch:        { type: "string",  example: "2022" },
+                  role:         { $ref: "#/components/schemas/CouncilRole" },
+                },
+              },
+            },
+          },
+        },
         responses: {
-          201: { description: "Account created" },
-          400: { description: "Missing required fields" },
-          409: { description: "Email already registered" },
+          201: {
+            description: "Account created successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    message:    { type: "string", example: "Account created successfully. Use POST /auth/login to get your access token." },
+                    userId:     { type: "string", example: "user_2abc123XYZ" },
+                    memberId:   { type: "string", example: "clx1abc123" },
+                    email:      { type: "string", example: "betrem@aau.edu.et" },
+                    section:    { $ref: "#/components/schemas/CouncilSection" },
+                    role:       { $ref: "#/components/schemas/CouncilRole" },
+                    redirectUrl:{ type: "string", example: "/council/education/clx1abc123" },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: "Missing or invalid required fields" },
+          409: { description: "Email address is already registered" },
         },
       },
     },
+
+    // ── POST /auth/login ────────────────────────────────────────────────────
     "/auth/login": {
       post: {
         tags: ["Auth"],
-        summary: "Login — get access token",
-        description: "Returns a `Bearer` JWT. Copy the `access_token` and click **Authorize 🔓** to authenticate all secured endpoints.",
+        summary: "Login and get access token",
+        description: `Authenticates with **email or phone** + **password** and returns a \`Bearer\` token.
+
+**How to use the token in Swagger:**
+1. Execute this endpoint to receive the \`access_token\`.
+2. Click **Authorize 🔓** at the top of the page.
+3. Paste the token value into the **Bearer** field and click **Authorize**.
+
+> All secured endpoints will now send \`Authorization: Bearer <access_token>\` automatically.
+
+**Token lifetime:** 24 hours (\`expires_in: 86400\` seconds).`,
         operationId: "authLogin",
-        requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["email","password"], properties: {
-          email: { type: "string", format: "email", example: "betrem@aau.edu.et" },
-          password: { type: "string", format: "password", example: "SecurePass123!" },
-        } } } } },
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["password"],
+                properties: {
+                  email: {
+                    type: "string",
+                    format: "email",
+                    example: "betrem@aau.edu.et",
+                    description: "Use **email** or **phone** — at least one is required.",
+                  },
+                  phone: {
+                    type: "string",
+                    example: "+251911234567",
+                    description: "Use **email** or **phone** — at least one is required.",
+                  },
+                  password: {
+                    type: "string",
+                    format: "password",
+                    example: "SecurePass123!",
+                  },
+                },
+              },
+              examples: {
+                "Login with email": {
+                  value: { email: "betrem@aau.edu.et", password: "SecurePass123!" },
+                },
+                "Login with phone": {
+                  value: { phone: "+251911234567", password: "SecurePass123!" },
+                },
+              },
+            },
+          },
+        },
         responses: {
-          200: { description: "Login successful", content: { "application/json": { schema: { type: "object", properties: {
-            access_token: { type: "string", description: "Paste this into Authorize 🔓 → Bearer value" },
-            token_type:   { type: "string", example: "Bearer" },
-            user: { type: "object", properties: { email: { type: "string" }, section: { $ref: "#/components/schemas/CouncilSection" }, role: { $ref: "#/components/schemas/CouncilRole" }, name: { type: "string" } } },
-          } } } } },
-          401: { description: "Invalid credentials" },
+          200: {
+            description: "Login successful — copy `access_token` and click **Authorize 🔓**",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    access_token: {
+                      type: "string",
+                      description: "Bearer token — paste this into the Authorize 🔓 dialog.",
+                      example: "sit_2abc123...",
+                    },
+                    token_type: { type: "string", example: "Bearer" },
+                    expires_in: { type: "integer", example: 86400, description: "Token lifetime in seconds (24 hours)." },
+                    user: {
+                      type: "object",
+                      properties: {
+                        clerkId:  { type: "string",  example: "user_2abc123XYZ" },
+                        email:    { type: "string",  example: "betrem@aau.edu.et", nullable: true },
+                        phone:    { type: "string",  example: "+251911234567",     nullable: true },
+                        name:     { type: "string",  example: "Betrem Hailu",      nullable: true },
+                        memberId: { type: "string",  example: "clx1abc123",        nullable: true },
+                        section:  { $ref: "#/components/schemas/CouncilSection" },
+                        role:     { $ref: "#/components/schemas/CouncilRole" },
+                        isActive: { type: "boolean", example: true, nullable: true },
+                      },
+                    },
+                  },
+                },
+                example: {
+                  access_token: "sit_2XqRk9mN...",
+                  token_type:   "Bearer",
+                  expires_in:   86400,
+                  user: {
+                    clerkId:  "user_2abc123XYZ",
+                    email:    "betrem@aau.edu.et",
+                    phone:    "+251911234567",
+                    name:     "Betrem Hailu",
+                    memberId: "clx1abc123",
+                    section:  "EDUCATION",
+                    role:     "MEMBER",
+                    isActive: true,
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Missing credentials",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+                example: { error: "email (or phone) and password are required" },
+              },
+            },
+          },
+          401: {
+            description: "Invalid credentials",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+                example: { error: "Invalid credentials" },
+              },
+            },
+          },
+          500: {
+            description: "Internal server error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+              },
+            },
+          },
         },
       },
     },
+
+    // ── GET /auth/me ────────────────────────────────────────────────────────
     "/auth/me": {
       get: {
-        tags: ["Auth"], summary: "Get my profile (requires token)", operationId: "authMe",
+        tags: ["Auth"],
+        summary: "Get my council profile",
+        description: "Returns the authenticated user's Clerk identity and their linked `CouncilMember` profile. Requires a valid `Bearer` token from `POST /auth/login`.",
+        operationId: "authMe",
         security: [{ ClerkAuth: [] }],
         responses: {
-          200: { description: "Current user", content: { "application/json": { schema: { type: "object", properties: {
-            email: { type: "string" }, section: { $ref: "#/components/schemas/CouncilSection" },
-            role: { $ref: "#/components/schemas/CouncilRole" }, onboarded: { type: "boolean" },
-            profile: { $ref: "#/components/schemas/CouncilMember" },
-          } } } } },
-          401: { description: "Unauthorized" },
+          200: {
+            description: "Authenticated user profile",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    clerkId:   { type: "string",  example: "user_2abc123XYZ" },
+                    email:     { type: "string",  example: "betrem@aau.edu.et", nullable: true },
+                    phone:     { type: "string",  example: "+251911234567",     nullable: true },
+                    section:   { $ref: "#/components/schemas/CouncilSection" },
+                    role:      { $ref: "#/components/schemas/CouncilRole" },
+                    memberId:  { type: "string",  example: "clx1abc123",        nullable: true },
+                    onboarded: { type: "boolean", example: true },
+                    profile:   { $ref: "#/components/schemas/CouncilMember" },
+                  },
+                },
+              },
+            },
+          },
+          401: {
+            description: "Missing or invalid Bearer token",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
+                example: { error: "Authorization header required: Bearer <access_token>" },
+              },
+            },
+          },
         },
       },
     },
+
+    // ── GET /api/me/redirect ────────────────────────────────────────────────
     "/api/me/redirect": {
       get: {
         tags: ["Session"],
-        summary: "Get redirect URL for the current signed-in user",
-        description: `Reads Clerk \`publicMetadata\` for the authenticated user and returns the correct redirect URL:\n\n- \`onboardingDone = true\` → \`/council/{section-slug}/{memberId}\`\n- Not onboarded yet → \`/onboarding\`\n- Not signed in → \`/sign-in\``,
+        summary: "Resolve post-login redirect URL",
+        description: `Reads Clerk \`publicMetadata\` for the authenticated user and returns the appropriate redirect URL:
+
+| Condition | Redirect URL |
+|---|---|
+| Onboarding complete | \`/council/{section-slug}/{memberId}\` |
+| Onboarding pending | \`/onboarding\` |
+| Not signed in | \`/sign-in\` |`,
         operationId: "getMeRedirect",
         security: [{ ClerkAuth: [] }],
         responses: {
           200: {
             description: "Redirect URL resolved",
-            content: { "application/json": { schema: { type: "object", properties: {
-              redirectUrl: { type: "string", example: "/council/education/clx1abc123" },
-            } } } },
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    redirectUrl: { type: "string", example: "/council/education/clx1abc123" },
+                  },
+                },
+              },
+            },
           },
         },
       },
     },
+
+    // ── POST /api/onboarding ────────────────────────────────────────────────
     "/api/onboarding": {
       post: {
         tags: ["Onboarding"],
         summary: "Complete first-time onboarding",
-        description: `Creates a \`CouncilMember\` record for the authenticated user and writes the following to Clerk \`publicMetadata\`:\n\n\`\`\`json\n{\n  "councilSection": "EDUCATION",\n  "councilMemberId": "clx1abc123",\n  "councilRole": "MEMBER",\n  "onboardingDone": true\n}\n\`\`\`\n\nReturns a redirect URL to the member's section page.`,
+        description: `Creates a \`CouncilMember\` record for the authenticated Clerk user and writes the following to their \`publicMetadata\`:
+
+\`\`\`json
+{
+  "councilSection":  "EDUCATION",
+  "councilMemberId": "clx1abc123",
+  "councilRole":     "MEMBER",
+  "onboardingDone":  true
+}
+\`\`\`
+
+Returns a redirect URL to the member's section page.
+This endpoint is called **once** per user after initial sign-up.`,
         operationId: "completeOnboarding",
         security: [{ ClerkAuth: [] }],
         requestBody: {
@@ -159,16 +365,16 @@ Which creates a \`CouncilMember\` record and writes the metadata to Clerk, compl
                 type: "object",
                 required: ["name", "email", "universityId", "section", "batch"],
                 properties: {
-                  name:          { type: "string", example: "Betrem Hailu" },
-                  email:         { type: "string", format: "email", example: "betrem@aau.edu.et" },
-                  phone:         { type: "string", example: "+251911234567" },
-                  universityId:  { type: "string", example: "UGR/1234/15" },
+                  name:          { type: "string",  example: "Betrem Hailu" },
+                  email:         { type: "string",  format: "email", example: "betrem@aau.edu.et" },
+                  phone:         { type: "string",  example: "+251911234567" },
+                  universityId:  { type: "string",  example: "UGR/1234/15" },
                   section:       { $ref: "#/components/schemas/CouncilSection" },
-                  subSection:    { type: "string", example: "አባላት" },
+                  subSection:    { type: "string",  example: "አባላት" },
                   role:          { $ref: "#/components/schemas/CouncilRole" },
-                  batch:         { type: "string", example: "2022" },
-                  baptismalName: { type: "string", example: "Mikael" },
-                  bio:           { type: "string" },
+                  batch:         { type: "string",  example: "2022" },
+                  baptismalName: { type: "string",  example: "Mikael" },
+                  bio:           { type: "string",  example: "Deacon and choir member since 2020." },
                 },
               },
             },

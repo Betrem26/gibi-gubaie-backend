@@ -13,10 +13,10 @@ function buildClient(): PrismaClient {
   return new PrismaClient({ adapter });
 }
 
+// Reuse a single client across all requests (both dev and production).
+// This prevents connection exhaustion under load.
+// In serverless environments the module is re-evaluated per cold start anyway.
 function getClient(): PrismaClient {
-  if (process.env.NODE_ENV === "production") {
-    return buildClient();
-  }
   if (!global._prisma) {
     global._prisma = buildClient();
   }

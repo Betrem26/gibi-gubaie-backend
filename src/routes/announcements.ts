@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { getAuth } from "@clerk/express";
 import { prisma } from "../lib/prisma";
-import { smsService, SMSService } from "../lib/sms-service";
+import { smsService, SMSService, SMSResult } from "../lib/sms-service";
 
 const router = Router();
 
@@ -93,11 +93,11 @@ async function sendAnnouncementSMS(title: string, body: string) {
     where: { isActive: true, phone: { not: null } },
     select: { phone: true },
   });
-  const phones = members.map((m) => m.phone).filter((p): p is string => p !== null);
+  const phones = members.map((m: { phone: string | null }) => m.phone).filter((p: string | null): p is string => p !== null);
   if (!phones.length) return { sent: 0, failed: 0, total: 0 };
   const msg     = SMSService.formatAnnouncementSMS(title, body);
   const results = await smsService.sendBulkSMS(phones, msg, "announcement");
-  return { sent: results.filter((r) => r.success).length, failed: results.filter((r) => !r.success).length, total: phones.length };
+  return { sent: results.filter((r: SMSResult) => r.success).length, failed: results.filter((r: SMSResult) => !r.success).length, total: phones.length };
 }
 
 export default router;

@@ -1,12 +1,10 @@
 import { Router, Request, Response } from "express";
-import { clerkClient } from "@clerk/express";
+import { clerkClient, verifyToken } from "@clerk/express";
 import { prisma } from "../lib/prisma";
 
 const router = Router();
 
 // ── POST /auth/register ───────────────────────────────────────────────────────
-// Creates a Clerk user account + CouncilMember record in one step.
-// Returns an access token (Clerk session JWT) on success.
 router.post("/register", async (req: Request, res: Response) => {
   const { name, email, password, phone, universityId, section, batch, role } = req.body;
 
@@ -24,18 +22,19 @@ router.post("/register", async (req: Request, res: Response) => {
       password,
       firstName: name.trim().split(" ")[0],
       lastName:  name.trim().split(" ").slice(1).join(" ") || undefined,
+      ...(phone ? { phoneNumber: [String(phone).trim()] } : {}),
     });
 
     // 2. Create CouncilMember in DB
     const member = await prisma.councilMember.create({
       data: {
-        name:        name.trim(),
-        email:       email.trim().toLowerCase(),
-        phone:       phone ? String(phone).trim() : null,
-        universityId:String(universityId).trim(),
+        name:         name.trim(),
+        email:        email.trim().toLowerCase(),
+        phone:        phone ? String(phone).trim() : null,
+        universityId: String(universityId).trim(),
         section,
-        role:        role ?? "MEMBER",
-        batch:       String(batch).trim(),
+        role:         role ?? "MEMBER",
+        batch:        String(batch).trim(),
       },
     });
 
@@ -49,9 +48,6 @@ router.post("/register", async (req: Request, res: Response) => {
       },
     });
 
-    // 4. Create a Clerk session token
-    const sessionList = await clerkClient.sessions.getSessionList({ userId: clerkUser.id });
-    // Sessions are created by the frontend SDK; return user info + instructions
     return res.status(201).json({
       message:    "Account created successfully. Use POST /auth/login to get your access token.",
       userId:     clerkUser.id,
@@ -59,109 +55,134 @@ router.post("/register", async (req: Request, res: Response) => {
       email:      clerkUser.emailAddresses[0]?.emailAddress,
       section,
       role:       role ?? "MEMBER",
-      redirectUrl:`/council/${slugFor(section)}/${member.id}`,
+      redirectUrl: `/council/${slugFor(section)}/${member.id}`,
     });
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Registration failed";
-    const isDuplicate = msg.toLowerCase().includes("already") || msg.toLowerCase().includes("taken") || msg.includes("Unique");
-    return res.status(isDuplicate ? 409 : 400).json({ error: isDuplicate ? "Email already registered." : msg });
+    const isDuplicate =
+      msg.toLowerCase().includes("already") ||
+      msg.toLowerCase().includes("taken") ||
+      msg.includes("Unique");
+    return res
+      .status(isDuplicate ? 409 : 400)
+      .json({ error: isDuplicate ? "Email already registered." : msg });
   }
 });
 
 // ── POST /auth/login ──────────────────────────────────────────────────────────
-// Verifies credentials via Clerk and returns a short-lived session JWT.
+// Accepts email OR phone + password.
+// Returns a sign-in token (access_token) that can be used as a Bearer token
+// for all subsequent API calls.
 router.post("/login", async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { email, phone, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ error: "email and password are required" });
+  if ((!email && !phone) || !password) {
+    return res.status(400).json({
+      error: "email (or phone) and password are required",
+    });
   }
 
   try {
-    // Verify via Clerk Backend API
-    const response = await fetch("https://api.clerk.com/v1/sign_ins", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${process.env.CLERK_SECRET_KEY}`,
-      },
-      body: JSON.stringify({
-        identifier: email.trim().toLowerCase(),
-        password,
-        strategy:   "password",
-      }),
-    });
+    // ── 1. Find Clerk user by email OR phone ──────────────────────────────────
+    let clerkUser: Awaited<ReturnType<typeof clerkClient.users.getUserList>>["data"][0] | null = null;
 
-    const data = await response.json() as {
-      client?: { sessions?: { id: string; last_active_token?: { jwt: string } }[] };
-      errors?: { message: string; long_message?: string }[];
-      id?: string;
-    };
-
-    if (!response.ok || data.errors?.length) {
-      const errMsg = data.errors?.[0]?.long_message ?? data.errors?.[0]?.message ?? "Invalid credentials";
-      return res.status(401).json({ error: errMsg });
+    if (email) {
+      const { data } = await clerkClient.users.getUserList({
+        emailAddress: [email.trim().toLowerCase()],
+        limit: 1,
+      });
+      clerkUser = data[0] ?? null;
+    } else if (phone) {
+      const { data } = await clerkClient.users.getUserList({
+        phoneNumber: [String(phone).trim()],
+        limit: 1,
+      });
+      clerkUser = data[0] ?? null;
     }
 
-    // Get session token from response
-    const session  = data.client?.sessions?.[0];
-    const jwt      = session?.last_active_token?.jwt;
-    const sessionId= session?.id;
+    if (!clerkUser) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
-    // Look up the council member from DB
-    const emailLower = email.trim().toLowerCase();
-    const member = await prisma.councilMember.findFirst({ where: { email: emailLower } });
+    // ── 2. Verify password ────────────────────────────────────────────────────
+    let passwordValid = false;
+    try {
+      const result = await clerkClient.users.verifyPassword({
+        userId:   clerkUser.id,
+        password,
+      });
+      passwordValid = result.verified;
+    } catch {
+      passwordValid = false;
+    }
+
+    if (!passwordValid) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    // ── 3. Issue sign-in token ────────────────────────────────────────────────
+    // This token acts as the access_token for API access.
+    // Frontend SDK usage: signIn.create({ strategy: "ticket", ticket: access_token })
+    const tokenRes = await clerkClient.signInTokens.createSignInToken({
+      userId:           clerkUser.id,
+      expiresInSeconds: 60 * 60 * 24, // 24 hours
+    });
+
+    // ── 4. Look up council member profile ─────────────────────────────────────
+    const emailLower = (email ?? clerkUser.emailAddresses[0]?.emailAddress ?? "").trim().toLowerCase();
+    const member     = await prisma.councilMember.findFirst({
+      where: emailLower ? { email: emailLower } : undefined,
+    });
 
     return res.status(200).json({
-      access_token:  jwt ?? null,
-      session_id:    sessionId ?? null,
-      token_type:    "Bearer",
-      message:       jwt ? "Login successful" : "Login successful — use the Clerk frontend SDK to obtain a session token for Swagger authorization.",
+      access_token: tokenRes.token,
+      token_type:   "Bearer",
+      expires_in:   86400,
       user: {
-        email:       emailLower,
-        memberId:    member?.id ?? null,
-        section:     member?.section ?? null,
-        role:        member?.role ?? null,
-        name:        member?.name ?? null,
-        isActive:    member?.isActive ?? null,
+        clerkId:  clerkUser.id,
+        email:    clerkUser.emailAddresses[0]?.emailAddress ?? null,
+        phone:    clerkUser.phoneNumbers[0]?.phoneNumber    ?? null,
+        name:     member?.name ?? ([clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || null),
+        memberId: member?.id       ?? null,
+        section:  member?.section  ?? null,
+        role:     member?.role     ?? null,
+        isActive: member?.isActive ?? null,
       },
     });
 
   } catch (err) {
-    return res.status(500).json({ error: err instanceof Error ? err.message : "Login failed" });
+    const msg = err instanceof Error ? err.message : "Login failed";
+    return res.status(500).json({ error: msg });
   }
 });
 
 // ── GET /auth/me ──────────────────────────────────────────────────────────────
-// Returns the council profile of the authenticated user.
-// Requires Authorization: Bearer <token>
+// Requires: Authorization: Bearer <access_token from /auth/login>
 router.get("/me", async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authorization header required: Bearer <token>" });
+    return res.status(401).json({ error: "Authorization header required: Bearer <access_token>" });
   }
 
   try {
     const token = authHeader.split(" ")[1];
-    // Verify the JWT with Clerk
-    const verifyRes = await fetch("https://api.clerk.com/v1/tokens/verify", {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${process.env.CLERK_SECRET_KEY}`,
-      },
-      body: JSON.stringify({ token }),
-    });
-    const verified = await verifyRes.json() as { sub?: string; errors?: { message: string }[] };
 
-    if (!verifyRes.ok || !verified.sub) {
+    // Verify the JWT using Clerk's verifyToken helper
+    const payload = await verifyToken(token, {
+      secretKey: process.env.CLERK_SECRET_KEY,
+    });
+
+    if (!payload?.sub) {
       return res.status(401).json({ error: "Invalid or expired token" });
     }
 
-    const clerkUser = await clerkClient.users.getUser(verified.sub);
+    const clerkUser = await clerkClient.users.getUser(payload.sub);
     const meta      = clerkUser.publicMetadata as {
-      councilSection?: string; councilMemberId?: string; councilRole?: string; onboardingDone?: boolean;
+      councilSection?:  string;
+      councilMemberId?: string;
+      councilRole?:     string;
+      onboardingDone?:  boolean;
     };
 
     const member = meta.councilMemberId
@@ -169,20 +190,21 @@ router.get("/me", async (req: Request, res: Response) => {
       : null;
 
     return res.json({
-      clerkId:    clerkUser.id,
-      email:      clerkUser.emailAddresses[0]?.emailAddress,
-      section:    meta.councilSection,
-      role:       meta.councilRole,
-      memberId:   meta.councilMemberId,
-      onboarded:  meta.onboardingDone ?? false,
-      profile:    member,
+      clerkId:   clerkUser.id,
+      email:     clerkUser.emailAddresses[0]?.emailAddress ?? null,
+      phone:     clerkUser.phoneNumbers[0]?.phoneNumber    ?? null,
+      section:   meta.councilSection  ?? null,
+      role:      meta.councilRole     ?? null,
+      memberId:  meta.councilMemberId ?? null,
+      onboarded: meta.onboardingDone  ?? false,
+      profile:   member,
     });
   } catch (err) {
     return res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
   }
 });
 
-// helper
+// ── helper ────────────────────────────────────────────────────────────────────
 function slugFor(section: string): string {
   const map: Record<string, string> = {
     MAIN_OFFICE: "main-office", EDUCATION: "education", CHOIR: "choir",
