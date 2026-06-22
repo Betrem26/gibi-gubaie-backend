@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma";
 
 const router = Router();
 
+// GET /api/members — returns all User records with attendance & payment counts.
+// Public read (no auth required) — mutations require auth.
 router.get("/", async (_req, res: Response) => {
   try {
     const members = await prisma.user.findMany({
@@ -12,41 +14,54 @@ router.get("/", async (_req, res: Response) => {
     });
     res.json(members);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "Failed" });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[GET /api/members] Error:", msg);
+    res.status(500).json({ error: msg });
   }
 });
 
+// POST /api/members — create a member manually (auth required)
 router.post("/", async (req: Request, res: Response) => {
   const { userId } = getAuth(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
   const body = req.body;
   const required = ["name", "email", "universityId", "department", "batch"];
   for (const f of required) {
     if (!body[f]) return res.status(400).json({ error: `Missing: ${f}` });
   }
+
   try {
     const member = await prisma.user.create({
       data: {
-        clerkId: `manual_${Date.now()}`,
-        name: String(body.name).trim(), email: String(body.email).trim().toLowerCase(),
-        phone: body.phone ? String(body.phone).trim() : null,
+        clerkId:      `manual_${Date.now()}`,
+        name:         String(body.name).trim(),
+        email:        String(body.email).trim().toLowerCase(),
+        phone:        body.phone ? String(body.phone).trim() : null,
         universityId: String(body.universityId).trim(),
-        department: body.department, batch: String(body.batch).trim(),
-        role: body.role ?? "MEMBER",
+        department:   body.department,
+        batch:        String(body.batch).trim(),
+        role:         body.role ?? "MEMBER",
       },
     });
     res.status(201).json(member);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Failed";
-    res.status(msg.includes("Unique") ? 409 : 400).json({ error: msg.includes("Unique") ? "Email or ID already exists." : msg });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[POST /api/members] Error:", msg);
+    res.status(msg.includes("Unique") ? 409 : 400).json({
+      error: msg.includes("Unique") ? "Email or ID already exists." : msg,
+    });
   }
 });
 
+// PATCH /api/members — update a member (auth required)
 router.patch("/", async (req: Request, res: Response) => {
   const { userId } = getAuth(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
   const { id, ...data } = req.body;
   if (!id) return res.status(400).json({ error: "ID required" });
+
   try {
     const member = await prisma.user.update({
       where: { id },
@@ -58,12 +73,16 @@ router.patch("/", async (req: Request, res: Response) => {
         ...(data.department   && { department: data.department }),
         ...(data.batch        && { batch: String(data.batch).trim() }),
         ...(data.role         && { role: data.role }),
-        ...(data.isActive     !== undefined && { isActive: Boolean(data.isActive) }),
+        ...(data.isActive     !== undefined && {
+          isActive: data.isActive === "false" || data.isActive === false ? false : Boolean(data.isActive),
+        }),
       },
     });
     res.json(member);
   } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "Failed" });
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[PATCH /api/members] Error:", msg);
+    res.status(400).json({ error: msg });
   }
 });
 
