@@ -28,7 +28,7 @@ All subsequent requests in this session will automatically include \`Authorizati
 
 | Identifier | Field | Example |
 |---|---|---|
-| Email | \`email\` | \`betrem@aau.edu.et\` |
+| Email | \`email\` | \`betrem26@gmail.com\` |
 | Phone | \`phone\` | \`+251911234567\` |
 
 You must provide exactly **one** of \`email\` or \`phone\`, plus \`password\`.
@@ -94,8 +94,8 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                 required: ["name", "email", "password", "universityId", "section", "batch"],
                 properties: {
                   name:         { type: "string",  example: "Betrem Hailu" },
-                  email:        { type: "string",  format: "email",    example: "betrem@aau.edu.et" },
-                  password:     { type: "string",  format: "password", example: "SecurePass123!", minLength: 8 },
+                  email:        { type: "string",  format: "email",    example: "betrem26@gmail.com" },
+                  password:     { type: "string",  format: "password", example: "BetreMariam21", minLength: 8 },
                   phone:        { type: "string",  example: "+251911234567", description: "Optional. E.164 format recommended." },
                   universityId: { type: "string",  example: "UGR/1234/15" },
                   section:      { $ref: "#/components/schemas/CouncilSection" },
@@ -117,7 +117,7 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                     message:    { type: "string", example: "Account created successfully. Use POST /auth/login to get your access token." },
                     userId:     { type: "string", example: "user_2abc123XYZ" },
                     memberId:   { type: "string", example: "clx1abc123" },
-                    email:      { type: "string", example: "betrem@aau.edu.et" },
+                    email:      { type: "string", example: "betrem26@gmail.com" },
                     section:    { $ref: "#/components/schemas/CouncilSection" },
                     role:       { $ref: "#/components/schemas/CouncilRole" },
                     redirectUrl:{ type: "string", example: "/council/education/clx1abc123" },
@@ -159,7 +159,7 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                   email: {
                     type: "string",
                     format: "email",
-                    example: "betrem@aau.edu.et",
+                    example: "betrem26@gmail.com",
                     description: "Use **email** or **phone** — at least one is required.",
                   },
                   phone: {
@@ -170,16 +170,16 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                   password: {
                     type: "string",
                     format: "password",
-                    example: "SecurePass123!",
+                    example: "BetreMariam21",
                   },
                 },
               },
               examples: {
                 "Login with email": {
-                  value: { email: "betrem@aau.edu.et", password: "SecurePass123!" },
+                  value: { email: "betrem26@gmail.com", password: "BetreMariam21" },
                 },
                 "Login with phone": {
-                  value: { phone: "+251911234567", password: "SecurePass123!" },
+                  value: { phone: "+251911234567", password: "BetreMariam21" },
                 },
               },
             },
@@ -204,8 +204,8 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                       type: "object",
                       properties: {
                         clerkId:  { type: "string",  example: "user_2abc123XYZ" },
-                        email:    { type: "string",  example: "betrem@aau.edu.et", nullable: true },
-                        phone:    { type: "string",  example: "+251911234567",     nullable: true },
+                        email:    { type: "string",  example: "betrem26@gmail.com", nullable: true },
+                        phone:    { type: "string",  example: "+251911234567",      nullable: true },
                         name:     { type: "string",  example: "Betrem Hailu",      nullable: true },
                         memberId: { type: "string",  example: "clx1abc123",        nullable: true },
                         section:  { $ref: "#/components/schemas/CouncilSection" },
@@ -221,7 +221,7 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                   expires_in:   86400,
                   user: {
                     clerkId:  "user_2abc123XYZ",
-                    email:    "betrem@aau.edu.et",
+                    email:    "betrem26@gmail.com",
                     phone:    "+251911234567",
                     name:     "Betrem Hailu",
                     memberId: "clx1abc123",
@@ -280,8 +280,8 @@ After registering, call **\`POST /auth/login\`** to obtain an access token.`,
                   type: "object",
                   properties: {
                     clerkId:   { type: "string",  example: "user_2abc123XYZ" },
-                    email:     { type: "string",  example: "betrem@aau.edu.et", nullable: true },
-                    phone:     { type: "string",  example: "+251911234567",     nullable: true },
+                    email:     { type: "string",  example: "betrem26@gmail.com", nullable: true },
+                    phone:     { type: "string",  example: "+251911234567",      nullable: true },
                     section:   { $ref: "#/components/schemas/CouncilSection" },
                     role:      { $ref: "#/components/schemas/CouncilRole" },
                     memberId:  { type: "string",  example: "clx1abc123",        nullable: true },
@@ -366,7 +366,7 @@ This endpoint is called **once** per user after initial sign-up.`,
                 required: ["name", "email", "universityId", "section", "batch"],
                 properties: {
                   name:          { type: "string",  example: "Betrem Hailu" },
-                  email:         { type: "string",  format: "email", example: "betrem@aau.edu.et" },
+                  email:         { type: "string",  format: "email", example: "betrem26@gmail.com" },
                   phone:         { type: "string",  example: "+251911234567" },
                   universityId:  { type: "string",  example: "UGR/1234/15" },
                   section:       { $ref: "#/components/schemas/CouncilSection" },
